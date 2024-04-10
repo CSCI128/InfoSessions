@@ -1,6 +1,7 @@
 from io import BytesIO
 import requests
 from PIL import Image, ImageFont, ImageDraw
+PADDING = 10
 
 def parse_json_to_list(data):
     """
@@ -18,6 +19,7 @@ def parse_json_to_list(data):
 
 def get_wrapped_text(text, font, line_length):
     """
+    This wraps text if it will exceed one line.
     This is stolen from stack overflow. I really didnt want to have to implement this.
     https://stackoverflow.com/a/67203353
     """
@@ -32,31 +34,58 @@ def get_wrapped_text(text, font, line_length):
 
     return '\n'.join(lines)
 
-def create_image_sheet(image, title, description, width, height):
-    # Compute the scale factor to preseve aspect ratio
+def recalulate_width_height(image, description, width, height):
+    """
+    This function calculates the new diemensions of all the elements to be placed on the sheet.
+    """
+
     scale = min(float(width-10) / float(image.size[0]), float(height - 10) / float(image.size[1]))
 
-    new_width, new_height = int(image.size[0] * scale), int(image.size[1] * scale)
+    image_width, image_height = int(image.size[0] * scale), int(image.size[1] * scale)
 
-    width, height = int(new_width * 1.5), int(new_height * 1.5)
+    width, height = image_width + PADDING * 3, image_height + PADDING
 
-    sheet = Image.new("RGB", (width, height), (5, 5, 5))
-    drawer = ImageDraw.Draw(sheet)
+    font = ImageFont.load_default(20)
 
-    image = image.resize((new_width, new_height))
-
-    font = ImageFont.load_default(27)
-
-    drawer.multiline_text((10, 10), get_wrapped_text(title, font, width - 20), align="center", font=font, fill=(255, 255, 255))
-
-    sheet.paste(image, (width//2 - new_width//2, 55))
+    height += 20 + PADDING
 
     font = ImageFont.load_default(14)
 
-    drawer.multiline_text((10, 65 + new_height), get_wrapped_text(description, font, width - 20), align="center", font=font, fill=(200, 200, 200))
+    wrappedDescription = get_wrapped_text(description, font, width - 20)
+
+    height += 20 * (wrappedDescription.count("\n") + 1) + PADDING
+
+    return image_width, image_height, width, height
+
+
+def create_image_sheet(image, title, description, width, height):
+    """
+    This function generates a sheet with the the title, image, and description.
+
+    It uses Pillow (another cool library you can use for your final project) to manipulate the image data.
+
+    This code is *not* the best (we have a lot of magic numbers), but it effectily lays out essentally a baseball card for the image of the day.
+    """
+
+    image_width, image_height, width, height = recalulate_width_height(image, description, width, height)
+
+    sheet = Image.new("RGB", (width, height), (15, 15, 15))
+
+    drawer = ImageDraw.Draw(sheet)
+
+    font = ImageFont.load_default(20)
+
+    leftPlacement = (width-10) // 2 - font.getlength(title) // 2 + 10
+    drawer.text((leftPlacement, 10), title, align="center", font=font, fill=(255, 255, 255))
+
+    image = image.resize((image_width, image_height))
+    sheet.paste(image, (width //2 - image_width//2, 55))
+
+    font = ImageFont.load_default(14)
+
+    drawer.multiline_text((10, 65 + image_height), get_wrapped_text(description, font, width - 20), align="center", font=font, fill=(200, 200, 200))
 
     return sheet
-
 
 
 def get_image_of_the_day():
